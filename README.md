@@ -111,5 +111,6 @@ Não utilize este código em ambientes de produção sem considerar a **LGPD** e
 
 ---
 
-👨‍💻 Desenvolvido por [Seu Nome] - FIAP 2025
-
+👨‍💻 Desenvolvido por Pedro Olivera Valotto] - FIAP 2025
+👨‍💻 Desenvolvido por Tomaz Versolato Carballo] - FIAP 2025
+👨‍💻 Desenvolvido por Rony Ken Nagai] - FIAP 2025
