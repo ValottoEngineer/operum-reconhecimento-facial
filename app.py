@@ -2,25 +2,20 @@ import cv2
 import mediapipe as mp
 import pickle
 import numpy as np
-from collections import deque, Counter
+from numpy.linalg import norm
 
-# Carregar embeddings salvos
+# Carregar banco de embeddings
 with open("encodings.pkl", "rb") as f:
     encodings = pickle.load(f)
 
-# Inicializa detector do MediaPipe
 mp_face_detection = mp.solutions.face_detection
+mp_face_mesh = mp.solutions.face_mesh
 
-# Configura webcam
 cap = cv2.VideoCapture(0)
 
-# Histórico das últimas previsões para suavização
-history = deque(maxlen=10)
+with mp_face_detection.FaceDetection(min_detection_confidence=0.6) as detector, \
+     mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5) as face_mesh:
 
-# Threshold para considerar a mesma pessoa
-THRESHOLD = 0.6
-
-with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6) as detector:
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -29,48 +24,54 @@ with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = detector.process(rgb)
 
-        label = "Desconhecido"  # valor padrão
-
         if results.detections:
             for detection in results.detections:
                 bboxC = detection.location_data.relative_bounding_box
                 h, w, _ = frame.shape
-                x, y, w_box, h_box = int(bboxC.xmin * w), int(bboxC.ymin * h), int(bboxC.width * w), int(bboxC.height * h)
+                x, y, w_box, h_box = int(bboxC.xmin * w), int(bboxC.ymin * h), \
+                                     int(bboxC.width * w), int(bboxC.height * h)
 
                 face_img = rgb[y:y+h_box, x:x+w_box]
 
                 if face_img.size == 0:
                     continue
 
-                # Redimensiona e gera embedding simples
-                embedding = cv2.resize(face_img, (128, 128)).flatten()
+                try:
+                    embedding = cv2.resize(face_img, (128, 128)).flatten().astype("float32")
+                    embedding = embedding / norm(embedding)
 
-                best_match = None
-                best_dist = float("inf")
+                    # Comparar com banco (cosine similarity)
+                    best_match = None
+                    best_dist = 1.0  # menor é melhor (0 = idêntico)
 
-                # Compara com todas as pessoas
-                for person, embeds in encodings.items():
-                    for ref_emb in embeds:
-                        dist = np.linalg.norm(embedding - ref_emb)
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_match = person
+                    for person, embeds in encodings.items():
+                        for ref_emb in embeds:
+                            dist = 1 - np.dot(embedding, ref_emb) / (norm(embedding) * norm(ref_emb))
+                            if dist < best_dist:
+                                best_dist = dist
+                                best_match = person
 
-                if best_match and best_dist < THRESHOLD:
-                    history.append(best_match)
-                else:
-                    history.append("Desconhecido")
+                    # Threshold ajustável
+                    label = best_match if best_dist < 0.4 else "Desconhecido"
 
-                # Voto majoritário
-                label = Counter(history).most_common(1)[0][0]
+                    # Mostrar resultado
+                    cv2.putText(frame, f"{label} ({best_dist:.4f})", (x, y-10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
+                    cv2.rectangle(frame, (x, y), (x+w_box, y+h_box), (255, 0, 0), 2)
 
-                # Caixa e nome na tela
-                cv2.putText(frame, f"{label}", (x, y-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-                cv2.rectangle(frame, (x, y), (x+w_box, y+h_box), (255, 0, 0), 2)
+                    # Mostrar landmarks
+                    mesh_results = face_mesh.process(rgb)
+                    if mesh_results.multi_face_landmarks:
+                        for face_landmarks in mesh_results.multi_face_landmarks:
+                            for lm in face_landmarks.landmark:
+                                cx, cy = int(lm.x * w), int(lm.y * h)
+                                cv2.circle(frame, (cx, cy), 1, (0, 255, 0), -1)
 
-        cv2.imshow("Reconhecimento Facial", frame)
-        if cv2.waitKey(1) & 0xFF == 27:  # ESC para sair
+                except Exception as e:
+                    print("Erro:", e)
+
+        cv2.imshow("Reconhecimento Facial (com landmarks)", frame)
+        if cv2.waitKey(1) & 0xFF == 27:
             break
 
 cap.release()
