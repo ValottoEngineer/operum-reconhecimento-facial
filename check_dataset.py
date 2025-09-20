@@ -1,43 +1,29 @@
-# check_dataset.py
-import cv2
 import os
-import face_recognition
+import cv2
+import mediapipe as mp
 
 dataset_dir = "dataset"
+mp_face = mp.solutions.face_detection
+detector = mp_face.FaceDetection(min_detection_confidence=0.5)
 
-def check_images():
-    print("[INFO] Iniciando validação do dataset...\n")
-    for person in os.listdir(dataset_dir):
-        person_path = os.path.join(dataset_dir, person)
-        if not os.path.isdir(person_path):
+for person in os.listdir(dataset_dir):
+    person_dir = os.path.join(dataset_dir, person)
+    if not os.path.isdir(person_dir):
+        continue
+
+    print(f"\n📂 Verificando pasta: {person}")
+
+    for img_name in os.listdir(person_dir):
+        img_path = os.path.join(person_dir, img_name)
+        img = cv2.imread(img_path)
+
+        if img is None:
+            print(f"❌ ERRO ao abrir {img_name}")
             continue
-        
-        for image_name in os.listdir(person_path):
-            image_path = os.path.join(person_path, image_name)
-            image = cv2.imread(image_path)
 
-            if image is None:
-                print(f"[ERRO] Não foi possível abrir a imagem: {image_path}")
-                continue
+        results = detector.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-            h, w = image.shape[:2]
-
-            # Verifica resolução mínima
-            if h < 150 or w < 150:
-                print(f"[AVISO] Imagem muito pequena ({w}x{h}): {image_path}")
-
-            # Converte para RGB (garante compatibilidade)
-            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-            # Detecta rostos na imagem
-            boxes = face_recognition.face_locations(rgb, model="hog")
-
-            if len(boxes) == 0:
-                print(f"[ERRO] Nenhum rosto detectado em: {image_path}")
-            else:
-                print(f"[OK] {image_path} - {len(boxes)} rosto(s) detectado(s).")
-
-    print("\n[INFO] Validação concluída!")
-
-if __name__ == "__main__":
-    check_images()
+        if results.detections:
+            print(f"✅ {img_name} -> rosto detectado")
+        else:
+            print(f"⚠️ {img_name} -> nenhum rosto detectado")
