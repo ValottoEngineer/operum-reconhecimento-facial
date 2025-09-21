@@ -80,7 +80,7 @@ python app.py
 ---
 
 ## 📹 Demonstração em vídeo
-🔗 *(Adicionar link do vídeo explicativo após gravação – até 3 min)*  
+🔗 *(Adicionar link do vídeo no .zip – até 3 min)*  
 
 O vídeo deve cobrir:  
 ✔️ Contexto e problema  
